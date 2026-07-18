@@ -27,7 +27,7 @@ Extensão da tabela `auth.users` do Supabase (relação 1:1 pelo mesmo `id`). O 
 | `id` | uuid PK | Mesmo id de `auth.users` — padrão Supabase. |
 | `display_name` | text | Nome exibido no app. |
 | `birth_date` | date | Idade alimenta estimativas de FC máxima (220−idade) quando não há teste. |
-| `sex` | text CHECK | Afeta estimativas fisiológicas padrão. |
+| `sex` | text CHECK (`male`,`female`,`other`) | Afeta estimativas fisiológicas padrão (VO2max, FC máx.). Para `other`, a aplicação usa o fallback de fórmula padrão (sem diferenciação por sexo) até haver um critério mais específico. |
 | `weight_kg` | numeric | Necessário para potência relativa (W/kg) no ciclismo. |
 | `timezone` | text | Define a "virada do dia" do PMC e o horário do sync. Atleta em fuso diferente do servidor teria treinos caindo no dia errado sem isso. |
 
