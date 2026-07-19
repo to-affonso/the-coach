@@ -6,100 +6,59 @@ Sequência de tarefas para o desenvolvimento via Claude Code. Cada tarefa foi di
 - **Ordem importa dentro da fase**; entre tarefas sem dependência declarada, a ordem é livre.
 - Decisão não coberta pelos docs → **parar e perguntar** (regra do CLAUDE.md).
 - Ao fim de cada fase há um **checkpoint de uso real**: usar o app de verdade antes de seguir — bugs de fundação custam caro depois.
+- **Fluxo de PR na prática:** commit na branch da tarefa → push → o humano abre o PR no GitHub → checar CI via API do GitHub (`gh` CLI não está disponível neste ambiente; usar `curl` na API REST) → depois de CI verde e confirmação do humano, merge **fast-forward** direto em `main` (sem squash) → conferir o deploy de produção na Vercel (também via API/deployments).
 
 ---
 
-## Fase 0 — Setup (o esqueleto que roda)
+## Fases 0–2 — concluídas (resumo para continuidade)
 
-**Objetivo:** projeto deployado, com CI mínima, antes de qualquer feature.
+As tarefas originais 0.1–0.4, 1.1–1.5 e 2.1–2.9 foram implementadas, revisadas e mescladas em `main` (histórico completo nos commits/PRs do GitHub — não reproduzido aqui). Esta seção substitui o backlog item-a-item dessas fases por um resumo orientado a quem for continuar o desenvolvimento, humano ou IA.
 
-**0.1 — Repositório e projeto Next.js**
-Clonar o repo do projeto (`https://github.com/to-affonso/the-coach.git`); inicializar com o comando canônico do design system (CLAUDE.md > UI): preset shadcn, base Radix, template Next + TypeScript. Copiar `CLAUDE.md` para a raiz e os docs para `/docs`. Instalar a skill `shadcn/skills`.
-*Aceite:* `npm run dev` sobe; página inicial renderiza com tokens do tema (light e dark).
+### O que já existe e funciona, em produção
 
-**0.2 — Supabase e variáveis de ambiente**
-Criar projeto Supabase; configurar clientes (browser + server) em `/lib/db`; `.env.local` + `.env.example` documentado; nada sensível commitado.
-*Aceite:* healthcheck de conexão com o banco passa em dev.
+- **Fundação:** Next.js (App Router) + TypeScript na Vercel, deploy automático em push pra `main`; Supabase (Postgres/Auth/Storage) com schema completo e RLS em toda tabela; Vitest + ESLint/typecheck rodando em CI.
+- **Identidade:** Auth por e-mail/senha e Google; as 5 áreas navegáveis (bottom tab bar mobile / sidebar desktop); Perfil com dados do atleta, limiares com histórico (nunca edita, sempre cria registro novo) e zonas derivadas read-only.
+- **Garmin:** conectar/desconectar com tokens cifrados (AES-256-GCM), senha nunca persistida; sync incremental de rotina (últimas atividades) e importação histórica de 90 dias disparada automaticamente na primeira conexão, com estimativa de limiares (`data_estimate`) a partir dos melhores esforços encontrados no histórico.
+- **Parser FIT:** métricas de resumo, `extra_metrics`, laps, tempo em zonas, streams reamostradas (5s), `route_polyline`, TSS calculado com o limiar vigente na data e congelado em `threshold_snapshot`.
+- **PMC:** `daily_metrics` (CTL/ATL/TSB) atualizado incrementalmente após cada sync, com recálculo em cascata quando uma atividade retroativa entra.
+- **Sync-on-open:** throttle de 10min ao abrir/focar o app, indicador global no header (estados ok/sincronizando/erro) com ação manual "Sincronizar agora".
+- **Feed:** cards por esporte (métricas certas por modalidade, thumbnail SVG da rota ou ícone indoor, sparkline lazy), agrupamento por dia, paginação por cursor, estados vazio/erro/aguardando-primeiro-sync.
+- **Detalhe da atividade** (rota compartilhada `/atividades/[id]`): resumo completo, tempo em zonas, laps, gráficos por canal da stream, mapa interativo (Leaflet + OSM) quando há GPS.
 
-**0.3 — Deploy na Vercel**
-Conectar repo à Vercel; env vars de produção; deploy automático no push para `main`.
-*Aceite:* URL pública servindo o app; push em `main` → deploy sem intervenção.
+### Onde as coisas vivem (orientação rápida)
 
-**0.4 — Base de testes e lint**
-Vitest configurado; ESLint + typecheck no script `lint`; GitHub Action rodando ambos em PRs.
-*Aceite:* PR com teste quebrado fica vermelho no GitHub.
+- `/lib/metrics` — funções puras (TSS, PMC, zonas, best-effort, hrTSS, NP/IF), todas com teste unitário. Novo cálculo determinístico entra aqui, nunca com I/O.
+- `/lib/garmin` — `sync.ts` (incremental de rotina), `historical-import.ts` (primeira conexão, 90 dias), `sync-dispatch.ts` (decide qual dos dois rodar, com base em `garmin_connections.last_sync_at`), `process-activity.ts` (pipeline por atividade, compartilhado pelos dois sincs), `fit-parser.ts`, `auth.ts`/`crypto.ts` (tokens), `threshold-estimation.ts`.
+- `/lib/db` — `admin.ts` (service role, bypassa RLS, só server-side sem sessão), `server.ts`/`client.ts` (sessão do usuário), `activities.ts`/`daily-metrics.ts` (queries reusadas pelas páginas).
+- `/components/feed`, `/components/atividade`, `/components/perfil` — um pacote de componentes por área da spec; `/hooks/use-in-view.ts` cobre o lazy-render por viewport usado no Feed.
+- `/app/(app)` — rotas autenticadas (Feed é `/`, `atividades/[id]` é o detalhe); `/app/api` — endpoints de sync (por usuário e cron diário), sempre chamando `sync-dispatch.ts`, nunca os módulos internos direto.
+- `/docs/modelo-de-dados.md`, `spec-telas.md`, `contratos-ia.md` — fonte da verdade. Toda decisão tomada em chat que não estava no doc original tem uma nota inline `"(decisão tomada no chat de planejamento, X.Y)"` — vale a pena `grep` por isso antes de mexer num arquivo relacionado, pra não contradizer uma decisão já tomada.
 
----
+### Débitos e decisões conhecidas (ler antes de continuar)
 
-## Fase 1 — Fundação (identidade, dados, casca do app)
+- **Cor por esporte** reaproveita a paleta genérica `--color-chart-1..4` (sem tokens dedicados por modalidade ainda) — ver `spec-telas.md`. Se o produto ganhar identidade visual própria por esporte, o mapeamento fica todo em `lib/sport-theme.ts`.
+- **`activities.name`** existe desde a 2.7 (migration `activities_add_name`), populado com `activity.activityName` do Garmin. Atividades sincronizadas antes dessa coluna existir ficam com `name` nulo — sem backfill — e o card cai pro nome do esporte.
+- **Sync incremental ineficiente:** hoje ele baixa e reenvia o FIT de toda atividade retornada pelo Garmin antes de descobrir (via violação da `UNIQUE` de `activities`) que ela já foi sincronizada. Funciona (dedupe correto), mas é lento — uma otimização futura seria checar quais `external_id` já existem no banco antes de baixar.
+- **Ilustrações indoor** no Feed são só o ícone do esporte (placeholder) — as ilustrações reais dependem de assets do designer (tarefa 4.6, ainda não feita).
+- **Slot de headline do insight** já existe no Feed e no Detalhe, mas fica vazio hoje — não há `insight-generator` ainda (4.1). Ele é omitido (não mostra "analisando..." fixo) até existir uma linha real em `activity_insights`.
+- **Card de resumo semanal e card de proposta de ajuste** (ambos na spec do Feed) foram deixados de fora da 2.7 de propósito — dependem de `planned_workouts`/`plan_adjustments` (Fase 3/4), que ainda não existem. Construir uma versão parcial teria gerado retrabalho.
+- **Sem suíte automatizada pro fluxo Garmin** (login, sync, importação histórica) — validado manualmente contra uma conta Garmin real via browser (`claude-in-chrome`) a cada tarefa. Rodar/testar isso localmente exige `.env.local` com um projeto Supabase real (linkado via MCP) e uma conta Garmin real conectada.
+- **Badge de vínculo** (Cumprido/Parcial) no Feed já está implementado (lê `planned_workouts.matched_activity_id`/`status`), mas nunca aparece na prática ainda — o matching (3.6) e o próprio plano (3.4) não existem.
 
-**Objetivo:** login funcionando, schema completo no banco, navegação das 5 áreas.
+### Comandos básicos
 
-**1.1 — Migrations do schema completo** *(dep: 0.2)*
-Todas as tabelas de `/docs/modelo-de-dados.md` em migrations: tipos, CHECKs, uniques, índices iniciais, triggers de `updated_at`.
-*Aceite:* `supabase db reset` aplica tudo limpo; inserts de exemplo respeitam constraints (testar violações esperadas).
-
-**1.2 — RLS em todas as tabelas** *(dep: 1.1)*
-Policies `user_id = auth.uid()` em toda tabela de usuário; policy de `profiles` por `id`.
-*Aceite:* teste automatizado com dois usuários — cada um enxerga apenas os próprios dados em todas as tabelas.
-
-**1.3 — Autenticação** *(dep: 1.1)*
-Supabase Auth com e-mail/senha + Google; criação automática de `profiles` no signup (trigger); rotas protegidas por middleware; telas de login/cadastro com componentes shadcn.
-*Aceite:* fluxo completo de cadastro → login → logout; rota protegida redireciona anônimo.
-
-**1.4 — Shell de navegação** *(dep: 1.3)*
-As 5 áreas com rotas; bottom tab bar (mobile) e sidebar (desktop); header com slot do indicador de sync (estático por ora); cada área com placeholder do seu estado vazio conforme spec.
-*Aceite:* navegação fluida nas 5 áreas em viewport mobile e desktop; dark mode íntegro.
-
-**1.5 — Perfil: dados do atleta e limiares** *(dep: 1.4)*
-Seções 1 e 2 da spec do Perfil: form de dados pessoais; limiares com histórico (`athlete_thresholds` — atualizar cria registro novo, nunca edita); tabela de zonas derivada (read-only).
-*Aceite:* atualizar um limiar preserva o registro anterior; zonas recalculam na tela; validações de form funcionam.
-
-**Checkpoint Fase 1:** criar conta real, preencher perfil e limiares, navegar tudo no celular.
+```
+npm run dev           # ambiente local
+npm run test          # Vitest
+npm run lint          # ESLint + tsc --noEmit
+npx supabase migration new <nome>   # nova migration (depois aplicar via MCP supabase ou CLI)
+```
 
 ---
 
-## Fase 2 — Dados reais (Garmin, métricas, Feed)
+## Checkpoint Fase 2 (em andamento)
 
-**Objetivo:** treinos entrando sozinhos, TSS/PMC calculados, Feed vivo. O app vira útil aqui.
-
-**2.1 — Biblioteca de métricas (funções puras)** *(sem dep de UI; pode ser paralela)*
-`/lib/metrics`: TSS por potência (bike), por pace (corrida/natação via CSS), hrTSS, fallback fixo de força (40/h); NP, IF; CTL/ATL/TSB incremental; zonas por limiar.
-*Aceite:* testes unitários com valores canônicos (1h no FTP = 100 TSS; NP de série conhecida; PMC de sequência conhecida) — a suíte mais importante do projeto.
-
-**2.2 — Login Garmin e tokens** *(dep: 1.5)*
-Fluxo da spec Perfil > Conexão: credenciais usadas uma vez, tokens criptografados (AES-256-GCM) em `garmin_connections`, senha jamais persistida/logada; estados de conexão; desconectar.
-*Aceite:* conectar conta real → status `active`; inspeção do banco mostra apenas tokens cifrados; desconectar limpa tokens.
-
-**2.3 — Motor de sync** *(dep: 2.2)*
-Buscar atividades desde `last_sync_at`; baixar FIT para o Storage; dedupe por `(user_id, source, external_id)`; atualizar estado/erros da conexão; endpoint de sync por usuário + cron diário.
-*Aceite:* rodar sync duas vezes seguidas não duplica nada; erro de credencial popula `last_error` sem quebrar nada.
-
-**2.4 — Parser FIT → activities + streams** *(dep: 2.3, 2.1)*
-Parsear FIT: colunas de resumo, `extra_metrics`, laps, zonas de tempo, streams reamostradas (5s, canais da spec), `route_polyline` simplificada; calcular TSS com limiar vigente + `threshold_snapshot`.
-*Aceite:* importar arquivos reais das 3 modalidades + força; conferir métricas contra o Garmin Connect; atividade indoor sem GPS processa sem erro.
-
-**2.5 — Atualização do PMC** *(dep: 2.4)*
-`daily_metrics` incremental pós-sync; recálculo em cascata quando atividade passada muda/entra retroativa; CTL de partida a partir do histórico importado.
-*Aceite:* teste de cascata — inserir atividade retroativa recalcula tudo dali em diante corretamente.
-
-**2.6 — Sync-on-open e indicador global** *(dep: 2.3)*
-Throttle de 10 min; indicador do header com os estados da spec; ação manual secundária; atualização do Feed sem reload ao concluir.
-*Aceite:* abrir o app após treino → atividade aparece sem toque; reaberturas em sequência não disparam sync repetido.
-
-**2.7 — Feed** *(dep: 2.4, 2.6)*
-Card completo da spec (header, visual — rota SVG de `route_polyline` / ilustrações indoor placeholder —, métricas por esporte, slot de headline, sparkline); agrupamento por dia; paginação por cursor; lazy render por viewport; estados vazios/erro.
-*Aceite:* Feed com 50+ atividades rola fluido no mobile; cards por esporte mostram as métricas certas; estados de primeira conexão funcionam.
-
-**2.8 — Detalhe da atividade (v1)** *(dep: 2.7)*
-Rota compartilhada: resumo completo (colunas + `extra_metrics` existentes), gráficos das streams por canal, laps, mapa interativo (Leaflet + OSM) quando houver GPS, tempo em zonas.
-*Aceite:* detalhe das 3 modalidades renderiza com os dados disponíveis; sem stream → tela degrada com elegância.
-
-**2.9 — Importar 90 dias no onboarding** *(dep: 2.5)*
-Primeira conexão dispara importação histórica com progresso visível; deriva estimativas de limiar (`data_estimate`) dos melhores esforços.
-*Aceite:* conta nova com Garmin ativo termina o fluxo com Feed populado, PMC com curva e limiares estimados no Perfil.
-
-**Checkpoint Fase 2:** usar por 1–2 semanas reais de treino (você + 1 beta). O PMC e o Feed devem estar confiáveis antes da IA entrar.
+Em vez de seguir direto pra Fase 3, a decisão em 2026-07-19 foi pausar a sequência do backlog para: (a) validar com mais uso real o comportamento do sync incremental e da importação histórica, e (b) revisar e melhorar UX/interface das telas já construídas (Feed, Detalhe, Perfil) antes de continuar. Ainda não há uma lista fixa de tarefas para esse período — a sessão que continuar este trabalho deve perguntar o que priorizar, em vez de assumir.
 
 ---
 
