@@ -19,7 +19,7 @@ export async function createClient() {
             )
           } catch {
             // chamado de um Server Component sem middleware de refresh de sessão;
-            // seguro ignorar aqui, tratado quando o middleware de auth existir (1.3).
+            // seguro ignorar aqui, o proxy.ts cuida do refresh.
           }
         },
       },
