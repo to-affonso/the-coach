@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 
 import { createAdminClient } from "@/lib/db/admin"
-import { syncUserGarminActivities } from "@/lib/garmin/sync"
+import { runGarminSync } from "@/lib/garmin/sync-dispatch"
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -20,9 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   const results = await Promise.allSettled(
-    (connections ?? []).map((connection) =>
-      syncUserGarminActivities(connection.user_id)
-    )
+    (connections ?? []).map((connection) => runGarminSync(connection.user_id))
   )
 
   const succeeded = results.filter((r) => r.status === "fulfilled").length

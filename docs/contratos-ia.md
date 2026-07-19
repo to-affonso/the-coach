@@ -22,6 +22,17 @@ Especificação dos três módulos de IA do produto: `plan-generator`, `plan-rev
 
 **Ordem do fluxo: conectar Garmin → importar histórico → formulário reduzido e pré-preenchido.** O onboarding é orientado a dados: antes do formulário, o app importa ~90 dias de histórico e deriva o que o autorrelato distorce — horas semanais reais, distribuição entre modalidades, estimativas de limiar pelos melhores esforços (ex.: melhor potência de 20min × 0,95 → FTP; melhores paces → limiar de corrida), e o **CTL de partida real** (o gerador conhece a fitness atual, não a adivinha). Princípio: **dado como default, usuário confirma** — dado passado não é intenção futura (disponibilidade continua sendo pergunta) e o histórico pode ser incompleto. Limiares derivados entram com `source='data_estimate'`. Sem conexão/histórico, o formulário completo é o fallback.
 
+**Fórmulas de estimativa de limiar (decisão tomada no chat de planejamento, 2.9)** — mesmo princípio (melhor esforço sustentado), janela por métrica, calculado sobre o histórico de 90 dias importado; esporte/métrica sem atividade que cubra a janela fica sem estimativa (nunca força um chute):
+
+| Métrica | Esporte | Janela | Cálculo |
+|---|---|---|---|
+| `ftp` | bike | melhor 20min de potência | × 0,95 |
+| `threshold_pace` | corrida | melhor 20min de velocidade | pace direto, sem desconto |
+| `css` | natação | melhor 15min de velocidade | pace direto (janela menor: treinos de piscina são mais curtos) |
+| `lthr` | swim/bike/run (uma estimativa por esporte) | melhor 20min de FC | valor direto |
+
+`effective_from` do limiar estimado é a data da atividade mais antiga importada — assim, quando cada atividade do lote é processada, o limiar já existe para toda a janela e o TSS nasce correto, sem precisar de recálculo retroativo (rule 6 do CLAUDE.md).
+
 Salvo integralmente em `plans.form_snapshot`; campos estruturais também em colunas próprias. Multi-step com progresso visível. *(Layout e microcopy: domínio do designer; abaixo, o conteúdo funcional.)*
 
 ### Passo 1 — Objetivo

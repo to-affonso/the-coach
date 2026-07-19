@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { createClient } from "@/lib/db/server"
-import { syncUserGarminActivities } from "@/lib/garmin/sync"
+import { runGarminSync } from "@/lib/garmin/sync-dispatch"
 
 export async function POST() {
   const supabase = await createClient()
@@ -13,7 +13,7 @@ export async function POST() {
   }
 
   try {
-    const result = await syncUserGarminActivities(claims.sub)
+    const result = await runGarminSync(claims.sub)
     return NextResponse.json(result)
   } catch (error) {
     const message =
