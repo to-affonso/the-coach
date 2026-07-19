@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { buildRoutePolyline, encodePolyline } from "@/lib/garmin/polyline"
+import {
+  buildRoutePolyline,
+  decodePolyline,
+  encodePolyline,
+} from "@/lib/garmin/polyline"
 
 describe("encodePolyline", () => {
   it("codifica o exemplo canônico da spec do Google Encoded Polyline", () => {
@@ -10,6 +14,26 @@ describe("encodePolyline", () => {
       { lat: 43.252, lng: -126.453 },
     ]
     expect(encodePolyline(points)).toBe("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
+  })
+})
+
+describe("decodePolyline", () => {
+  it("decodifica o exemplo canônico da spec do Google Encoded Polyline", () => {
+    const points = decodePolyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
+    expect(points).toEqual([
+      { lat: 38.5, lng: -120.2 },
+      { lat: 40.7, lng: -120.95 },
+      { lat: 43.252, lng: -126.453 },
+    ])
+  })
+
+  it("é o inverso exato de encodePolyline (round-trip)", () => {
+    const points = [
+      { lat: -22.90642, lng: -43.18223 },
+      { lat: -22.9, lng: -43.2 },
+      { lat: -22.95123, lng: -43.15987 },
+    ]
+    expect(decodePolyline(encodePolyline(points))).toEqual(points)
   })
 })
 

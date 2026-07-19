@@ -136,6 +136,7 @@ Um treino realizado, de qualquer fonte. Guarda as **métricas agregadas** em col
 | `source` | text CHECK (`garmin`,`file`,`manual`) | Preparado para múltiplas origens desde o dia 1 (Strava entra depois como novo valor, sem migration estrutural). |
 | `external_id` | text | ID da atividade na origem. `UNIQUE (user_id, source, external_id)` — **deduplicação garantida pelo banco**: rodar o sync duas vezes jamais duplica um treino. |
 | `sport` | text CHECK | Mesmo vocabulário de `planned_workouts`. |
+| `name` | text NULL | Título dado pelo atleta no Garmin Connect (`activity.activityName` da API de listagem, não vem do FIT) — usado no header do card do Feed (decisão tomada no chat de planejamento, 2.7). NULL para atividades sincronizadas antes desta coluna existir (sem backfill) ou sem nome na origem; o card cai para o nome do esporte. |
 | `start_time` | timestamptz | |
 | `duration_s`, `moving_time_s` | int | Tempo total vs. tempo em movimento (pausas importam na análise). |
 | `distance_m`, `elevation_gain_m` | numeric | |

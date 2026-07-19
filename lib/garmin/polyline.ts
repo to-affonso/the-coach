@@ -21,6 +21,36 @@ export function encodePolyline(points: GeoPoint[]): string {
   return result
 }
 
+/** Inverso de encodePolyline — usado para desenhar o SVG do thumbnail no Feed/detalhe. */
+export function decodePolyline(encoded: string): GeoPoint[] {
+  const points: GeoPoint[] = []
+  let index = 0
+  let lat = 0
+  let lng = 0
+
+  function decodeSignedNumber(): number {
+    let result = 0
+    let shift = 0
+    let byte: number
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+
+    return result & 1 ? ~(result >> 1) : result >> 1
+  }
+
+  while (index < encoded.length) {
+    lat += decodeSignedNumber()
+    lng += decodeSignedNumber()
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 })
+  }
+
+  return points
+}
+
 function encodeSignedNumber(num: number): string {
   let sgnNum = num << 1
   if (num < 0) sgnNum = ~sgnNum

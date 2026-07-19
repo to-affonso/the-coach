@@ -200,6 +200,7 @@ export async function syncUserGarminActivities(
         source: "garmin",
         external_id: externalId,
         sport,
+        name: activity.activityName,
         start_time: startTime,
         duration_s: durationSec,
         moving_time_s: Math.round(

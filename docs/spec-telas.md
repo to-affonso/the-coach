@@ -20,6 +20,8 @@ Especificação funcional das cinco áreas do app. Este documento define **o que
 
 **Unidades (v1):** sistema métrico fixo (km, m, min/km, min/100m, watts, bpm). Preferência de unidades imperial fica para v2.
 
+**Cor por modalidade (decisão tomada no chat de planejamento, 2.7/2.8):** sem tokens dedicados por esporte no tema ainda — reaproveita a paleta genérica de gráficos já existente: `swim` → `--color-chart-1`, `bike` → `--color-chart-2`, `run` → `--color-chart-3`, `strength` → `--color-chart-4`. Se o produto ganhar identidade visual própria por esporte no futuro, tokens dedicados substituem este mapeamento num só lugar (`lib/sport-theme.ts`).
+
 ---
 
 ## 1. Feed (home)
