@@ -1,3 +1,4 @@
+import { GarminConnection } from "@/components/perfil/garmin-connection"
 import { PersonalDataForm } from "@/components/perfil/personal-data-form"
 import type {
   Metric,
@@ -9,26 +10,33 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/db/server"
 
-// Seções 3-4 chegam nas tarefas 2.2 (conexão Garmin) e no atalho de plano ativo.
-// Seções 1-2 (dados do atleta, limiares e zonas) e Conta são reais desde a 1.5/1.3.
+// Seção 4 (atalho de plano ativo) chega junto da página Plano (Fase 3).
+// Seções 1-3 (dados do atleta, limiares e zonas, conexão Garmin) e Conta são
+// reais desde a 1.5/2.2/1.3.
 export default async function PerfilPage() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getClaims()
   const email = data?.claims.email as string | undefined
   const userId = data?.claims.sub as string
 
-  const [{ data: profile }, { data: thresholdRows }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, birth_date, sex, weight_kg, timezone")
-      .eq("id", userId)
-      .single(),
-    supabase
-      .from("athlete_thresholds")
-      .select("sport, metric, value, effective_from, source")
-      .eq("user_id", userId)
-      .order("effective_from", { ascending: false }),
-  ])
+  const [{ data: profile }, { data: thresholdRows }, { data: garminConnection }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, birth_date, sex, weight_kg, timezone")
+        .eq("id", userId)
+        .single(),
+      supabase
+        .from("athlete_thresholds")
+        .select("sport, metric, value, effective_from, source")
+        .eq("user_id", userId)
+        .order("effective_from", { ascending: false }),
+      supabase
+        .from("garmin_connections")
+        .select("status, last_error, last_sync_at")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ])
 
   // Uma linha por (esporte, métrica): a mais recente por effective_from
   // (já vem ordenado desc, então a primeira ocorrência de cada chave vence).
@@ -79,9 +87,9 @@ export default async function PerfilPage() {
 
       <Separator />
 
-      <section className="space-y-1">
+      <section className="space-y-4">
         <h2 className="font-semibold">Conexão Garmin</h2>
-        <p className="text-sm text-muted-foreground">Em breve.</p>
+        <GarminConnection connection={garminConnection} />
       </section>
 
       <Separator />
