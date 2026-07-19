@@ -156,6 +156,7 @@ As séries temporais reamostradas, **separadas de `activities` de propósito**. 
 | Campo | Tipo | Justificativa |
 |---|---|---|
 | `activity_id` | uuid PK/FK → activities | Relação 1:1. |
+| `user_id` | uuid FK → profiles | Denormalizado a partir de `activities.user_id` — regra geral de RLS do documento ("Princípios gerais"): toda tabela filha carrega `user_id` para a policy não depender de JOIN. |
 | `resolution_s` | int | Resolução da reamostragem (padrão: 5s). Registrada para os gráficos interpretarem o eixo do tempo. |
 | `data` | jsonb | `{"t":[...],"hr":[...],"watts":[...],"pace":[...],"cad":[...],"alt":[...],"dist":[...],"lat":[...],"lng":[...]}` — arrays paralelos; canais ausentes são omitidos. Formato compacto e direto para bibliotecas de gráfico; lat/lng alimentam o mapa interativo do detalhe. |
 
