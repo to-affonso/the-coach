@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/db/admin"
+import { recalculateDailyMetricsFrom } from "@/lib/db/daily-metrics"
 import {
   restoreGarminSession,
   translateGarminError,
@@ -87,6 +88,9 @@ export async function syncUserGarminActivities(
 
   let inserted = 0
   let skipped = 0
+  // Data mais antiga entre as atividades inseridas nesta corrida — o PMC só
+  // precisa recalcular a partir dali (dias antes não mudaram).
+  let earliestInsertedStartTime: string | undefined
 
   for (const activity of activities) {
     const sport = mapGarminSportType(activity.activityType.typeKey)
@@ -241,6 +245,13 @@ export async function syncUserGarminActivities(
     }
 
     inserted++
+    if (!earliestInsertedStartTime || startTime < earliestInsertedStartTime) {
+      earliestInsertedStartTime = startTime
+    }
+  }
+
+  if (earliestInsertedStartTime) {
+    await recalculateDailyMetricsFrom(supabase, userId, earliestInsertedStartTime)
   }
 
   await supabase
