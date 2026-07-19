@@ -4,13 +4,14 @@ create extension if not exists pgtap with schema extensions;
 select plan(26);
 
 -- Fixtures: dois usuários, uma linha em cada uma das 12 tabelas de usuário.
+-- O trigger on_auth_user_created (1.3) já cria a linha em public.profiles
+-- sozinho ao inserir em auth.users, então só atualizamos o display_name aqui.
 insert into auth.users (id, email) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'user.a@example.com'),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'user.b@example.com');
 
-insert into public.profiles (id, display_name) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'User A'),
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'User B');
+update public.profiles set display_name = 'User A' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+update public.profiles set display_name = 'User B' where id = 'bbbbbbbb-0000-0000-0000-000000000002';
 
 insert into public.athlete_thresholds (user_id, sport, metric, value, effective_from, source) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'bike', 'ftp', 200, current_date, 'test'),
