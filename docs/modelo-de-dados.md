@@ -158,7 +158,7 @@ As séries temporais reamostradas, **separadas de `activities` de propósito**. 
 | `activity_id` | uuid PK/FK → activities | Relação 1:1. |
 | `user_id` | uuid FK → profiles | Denormalizado a partir de `activities.user_id` — regra geral de RLS do documento ("Princípios gerais"): toda tabela filha carrega `user_id` para a policy não depender de JOIN. |
 | `resolution_s` | int | Resolução da reamostragem (padrão: 5s). Registrada para os gráficos interpretarem o eixo do tempo. |
-| `data` | jsonb | `{"t":[...],"hr":[...],"watts":[...],"pace":[...],"cad":[...],"alt":[...],"dist":[...],"lat":[...],"lng":[...]}` — arrays paralelos; canais ausentes são omitidos. Formato compacto e direto para bibliotecas de gráfico; lat/lng alimentam o mapa interativo do detalhe. |
+| `data` | jsonb | `{"t":[...],"hr":[...],"watts":[...],"pace":[...],"cad":[...],"alt":[...],"dist":[...],"lat":[...],"lng":[...]}` — arrays paralelos; canais ausentes são omitidos. Formato compacto e direto para bibliotecas de gráfico; lat/lng alimentam o mapa interativo do detalhe. **`pace` guarda velocidade em m/s (unidade canônica)**, não minutos/km — o nome é o rótulo semântico do canal (decisão tomada no chat de planejamento, 2.4), consistente com a regra geral de unidades do projeto: conversão para pace de exibição acontece só na UI. |
 
 Regra de retenção do free tier: streams alimentam gráficos; o dado fiel é o arquivo FIT no Storage. Se o banco apertar, streams antigas podem ser descartadas e regeradas sob demanda.
 
