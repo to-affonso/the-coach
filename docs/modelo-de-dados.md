@@ -27,7 +27,7 @@ Extensão da tabela `auth.users` do Supabase (relação 1:1 pelo mesmo `id`). O 
 | `id` | uuid PK | Mesmo id de `auth.users` — padrão Supabase. |
 | `display_name` | text | Nome exibido no app. |
 | `birth_date` | date | Idade alimenta estimativas de FC máxima (220−idade) quando não há teste. |
-| `sex` | text CHECK | Afeta estimativas fisiológicas padrão. |
+| `sex` | text CHECK (`male`,`female`,`other`) | Afeta estimativas fisiológicas padrão (VO2max, FC máx.). Para `other`, a aplicação usa o fallback de fórmula padrão (sem diferenciação por sexo) até haver um critério mais específico. |
 | `weight_kg` | numeric | Necessário para potência relativa (W/kg) no ciclismo. |
 | `timezone` | text | Define a "virada do dia" do PMC e o horário do sync. Atleta em fuso diferente do servidor teria treinos caindo no dia errado sem isso. |
 
@@ -156,8 +156,9 @@ As séries temporais reamostradas, **separadas de `activities` de propósito**. 
 | Campo | Tipo | Justificativa |
 |---|---|---|
 | `activity_id` | uuid PK/FK → activities | Relação 1:1. |
+| `user_id` | uuid FK → profiles | Denormalizado a partir de `activities.user_id` — regra geral de RLS do documento ("Princípios gerais"): toda tabela filha carrega `user_id` para a policy não depender de JOIN. |
 | `resolution_s` | int | Resolução da reamostragem (padrão: 5s). Registrada para os gráficos interpretarem o eixo do tempo. |
-| `data` | jsonb | `{"t":[...],"hr":[...],"watts":[...],"pace":[...],"cad":[...],"alt":[...],"dist":[...],"lat":[...],"lng":[...]}` — arrays paralelos; canais ausentes são omitidos. Formato compacto e direto para bibliotecas de gráfico; lat/lng alimentam o mapa interativo do detalhe. |
+| `data` | jsonb | `{"t":[...],"hr":[...],"watts":[...],"pace":[...],"cad":[...],"alt":[...],"dist":[...],"lat":[...],"lng":[...]}` — arrays paralelos; canais ausentes são omitidos. Formato compacto e direto para bibliotecas de gráfico; lat/lng alimentam o mapa interativo do detalhe. **`pace` guarda velocidade em m/s (unidade canônica)**, não minutos/km — o nome é o rótulo semântico do canal (decisão tomada no chat de planejamento, 2.4), consistente com a regra geral de unidades do projeto: conversão para pace de exibição acontece só na UI. |
 
 Regra de retenção do free tier: streams alimentam gráficos; o dado fiel é o arquivo FIT no Storage. Se o banco apertar, streams antigas podem ser descartadas e regeradas sob demanda.
 
@@ -226,9 +227,13 @@ Registro de toda chamada de IA feita pelo sistema.
 
 ## Decisões transversais
 
+**Sync ignora atividades fora do vocabulário do app (decisão tomada no chat de planejamento, 2.3).** Garmin rastreia muitos tipos de atividade (caminhada, trilha, golfe, ioga, esqui...) além de swim/bike/run/strength. O motor de sync (`lib/garmin/sport-mapping.ts`) mapeia só os tipos reconhecidos e pula silenciosamente o resto — o app é focado em triathlon, não precisa importar o histórico completo do dispositivo. `brick` nunca aparece como tipo vindo do Garmin (ver "fora do escopo da v1" abaixo: chega como duas atividades separadas).
+
 **Matching planejado ↔ realizado.** Após cada sync, para cada atividade nova: buscar `planned_workouts` do mesmo usuário com mesmo `sport`, `scheduled_date` = dia da atividade e `status = 'planned'`. Um candidato → vincula automaticamente e marca `completed` (ou `partial` se a duração realizada < 70% da planejada). Zero ou múltiplos candidatos → deixa sem vínculo e a UI oferece vinculação manual no detalhe do treino. Regra deliberadamente simples: erros de matching são visíveis e corrigíveis pelo usuário, e a heurística pode evoluir depois sem mudar o schema.
 
 **Criptografia dos tokens Garmin.** Tokens em `garmin_connections.oauth_tokens` são criptografados na aplicação (AES-256-GCM) com chave guardada como variável de ambiente na Vercel — nunca no banco, nunca no repositório. Um dump do banco sozinho não expõe nenhuma sessão Garmin.
+
+**Biblioteca de login Garmin (decisão tomada no chat de planejamento, 2.2).** Não existe API oficial para login de usuário no Garmin Connect; a implementação de referência em Python (`garth`) foi descontinuada e o pacote npm principal do ecossistema está sem commits há ~20 meses. Usamos `@gooin/garmin-connect` (fork ativo, na prática publicado a partir de `gooin/garmin-connect-cn`) apesar do build ofuscado — risco aceito, mitigado por nunca persistir a senha (rule 5). `oauth_tokens` guarda o JSON `{oauth1, oauth2}` completo cifrado: o OAuth1 dura ~1 ano e é o que permite renovar o OAuth2 (curto) sem pedir senha de novo. A lib não tem classes de erro tipadas — só `Error` genérico com mensagem em **chinês**; `/lib/garmin/auth.ts` reconhece os 4 cenários (senha errada, conta bloqueada, MFA exigido, erro HTTP genérico incl. 429/rate-limit) por match de substring nessas strings específicas, com fallback para mensagem genérica se a lib mudar o texto numa versão futura. **MFA não é suportado na v1** — conta com autenticação em duas etapas recebe erro claro pedindo para desativar temporariamente ou usar outra conta; suportar exigiria uma tabela de sessão de login pendente que não existe no schema atual.
 
 **Índices mínimos iniciais.** `activities (user_id, start_time DESC)` para o feed; `planned_workouts (user_id, scheduled_date)` para o calendário; `daily_metrics` já é servida pela PK composta. Índices adicionais só quando uma consulta lenta real aparecer — índice prematuro é custo de escrita sem benefício medido.
 
@@ -237,4 +242,5 @@ Registro de toda chamada de IA feita pelo sistema.
 ## Decisões de cálculo (definidas)
 
 1. **TSS de treinos de força:** se a atividade tem dados de FC, calcular **hrTSS** (baseado no tempo em zonas de FC relativo ao LTHR). Sem FC, aplicar valor fixo de **40 TSS por hora**, proporcional à duração. A prioridade hrTSS > valor fixo vale como regra geral para qualquer atividade sem métrica de potência/pace confiável.
-2. **Natação sem CSS definido no onboarding:** a IA estima o CSS a partir das respostas do formulário, gravando em `athlete_thresholds` com `source = 'ai_estimate'`. A UI exibe um aviso persistente sugerindo o teste de 400m + 200m nas primeiras semanas; quando o teste é registrado, o novo CSS entra com `source = 'test'` e passa a valer dali em diante (o histórico anterior permanece calculado com a estimativa — regra do `threshold_snapshot`).
+2. **hrTSS (força e qualquer atividade sem potência/pace confiável, com FC):** fórmula universal do sistema (IF² × horas × 100) com base em FC, **integrada sobre a stream quando existir**: `hrTSS = Σ(Δt × (FC_i/LTHR)²) × 100 / 3600` (captura a variabilidade de intervalados — média antes do quadrado achataria o esforço). Fallback sem stream: `horas × (FC_média/LTHR)² × 100`. Amostras fora de 30–230 bpm descartadas. Testes canônicos: FC constante no LTHR por 1h = 100 nas duas vias; intervalado sintético pontua mais pela stream que pela média. Limitação aceita: FC atrasa e sofre drift — precisão grosseira é suficiente para o papel de fallback no PMC.
+3. **Natação sem CSS definido no onboarding:** a IA estima o CSS a partir das respostas do formulário, gravando em `athlete_thresholds` com `source = 'ai_estimate'`. A UI exibe um aviso persistente sugerindo o teste de 400m + 200m nas primeiras semanas; quando o teste é registrado, o novo CSS entra com `source = 'test'` e passa a valer dali em diante (o histórico anterior permanece calculado com a estimativa — regra do `threshold_snapshot`).
