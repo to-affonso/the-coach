@@ -20,6 +20,8 @@ Especificação funcional das cinco áreas do app. Este documento define **o que
 
 **Unidades (v1):** sistema métrico fixo (km, m, min/km, min/100m, watts, bpm). Preferência de unidades imperial fica para v2.
 
+**Cor por modalidade (decisão tomada no chat de planejamento, 2.7/2.8):** sem tokens dedicados por esporte no tema ainda — reaproveita a paleta genérica de gráficos já existente: `swim` → `--color-chart-1`, `bike` → `--color-chart-2`, `run` → `--color-chart-3`, `strength` → `--color-chart-4`. Se o produto ganhar identidade visual própria por esporte no futuro, tokens dedicados substituem este mapeamento num só lugar (`lib/sport-theme.ts`).
+
 ---
 
 ## 1. Feed (home)
@@ -179,7 +181,11 @@ Cada treino é um chip com ícone do esporte + título curto + duração. Estado
 2. **Limiares e zonas:** um bloco por esporte:
    - Valor vigente de cada métrica + badge de origem (`manual` / `teste` / `estimativa IA`) + data de vigência.
    - `Atualizar` → Dialog: novo valor + data + origem → **cria novo registro** em `athlete_thresholds` (a UI deixa claro: "o histórico anterior permanece — seus treinos passados não são recalculados").
-   - **Tabela de zonas derivada** (somente leitura na v1): bike 7 zonas de potência (modelo Coggan, % do FTP); corrida zonas de pace (% do pace limiar); FC 5 zonas (% do LTHR ou FC máx). Calculadas, não editáveis — edição manual de zonas é v2.
+   - **Tabela de zonas derivada** (somente leitura na v1). Calculadas, não editáveis — edição manual é v2:
+     - **Bike (potência):** 7 zonas, modelo Coggan, % do FTP.
+     - **Corrida (pace):** 5 zonas, % do pace limiar (maior % = mais lento): Z1 Recuperação > 129% · Z2 Resistência 114–129% · Z3 Ritmo 106–113% · Z4 Limiar 100–105% · Z5 VO2max < 100%. (7 zonas não se aplicam a pace: nas intensidades altas as faixas comprimem abaixo do ruído de GPS; trabalho de sprint é prescrito por esforço/repetições, não por zona de pace.)
+     - **Natação (pace):** 5 zonas, % do CSS (maior % = mais lento): Z1 Recuperação > 115% · Z2 Resistência 106–115% · Z3 Ritmo 102–105% · Z4 Limiar (CSS) 98–101% · Z5 Velocidade < 98%. Valores iniciais, calibráveis com uso.
+     - **FC:** 5 zonas, modelo Friel/Coggan, % do LTHR do esporte (ou da FC máx. quando não houver LTHR registrado): Z1 <81% · Z2 81–89% · Z3 90–93% · Z4 94–99% · Z5 ≥100%.
 3. **Conexão Garmin:** o centro de confiança da integração não-oficial:
    - Estado atual (Badge: Conectada / Expirada / Erro / Desconectada), último sync, próximo sync automático.
    - `Conectar`: Dialog com e-mail e senha Garmin + texto explícito: "Sua senha é usada uma única vez para autenticar e nunca é armazenada. Guardamos apenas tokens de sessão criptografados." Honestidade aqui é feature.
