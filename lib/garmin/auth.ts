@@ -92,3 +92,17 @@ export async function loginToGarmin(
 
   return client.exportToken()
 }
+
+/**
+ * Restaura uma sessão a partir de tokens já salvos (sync, sem senha). O
+ * construtor exige username/password truthy mesmo quando só vamos usar
+ * loadToken — nunca são transmitidos nesse caminho, só checados.
+ */
+export function restoreGarminSession(tokens: GarminTokens): GarminConnect {
+  const client = new GarminConnect({
+    username: "restored-session",
+    password: "restored-session",
+  })
+  client.loadToken(tokens.oauth1, tokens.oauth2)
+  return client
+}

@@ -227,6 +227,8 @@ Registro de toda chamada de IA feita pelo sistema.
 
 ## Decisões transversais
 
+**Sync ignora atividades fora do vocabulário do app (decisão tomada no chat de planejamento, 2.3).** Garmin rastreia muitos tipos de atividade (caminhada, trilha, golfe, ioga, esqui...) além de swim/bike/run/strength. O motor de sync (`lib/garmin/sport-mapping.ts`) mapeia só os tipos reconhecidos e pula silenciosamente o resto — o app é focado em triathlon, não precisa importar o histórico completo do dispositivo. `brick` nunca aparece como tipo vindo do Garmin (ver "fora do escopo da v1" abaixo: chega como duas atividades separadas).
+
 **Matching planejado ↔ realizado.** Após cada sync, para cada atividade nova: buscar `planned_workouts` do mesmo usuário com mesmo `sport`, `scheduled_date` = dia da atividade e `status = 'planned'`. Um candidato → vincula automaticamente e marca `completed` (ou `partial` se a duração realizada < 70% da planejada). Zero ou múltiplos candidatos → deixa sem vínculo e a UI oferece vinculação manual no detalhe do treino. Regra deliberadamente simples: erros de matching são visíveis e corrigíveis pelo usuário, e a heurística pode evoluir depois sem mudar o schema.
 
 **Criptografia dos tokens Garmin.** Tokens em `garmin_connections.oauth_tokens` são criptografados na aplicação (AES-256-GCM) com chave guardada como variável de ambiente na Vercel — nunca no banco, nunca no repositório. Um dump do banco sozinho não expõe nenhuma sessão Garmin.

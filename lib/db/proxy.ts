@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/api/health"]
+// /api/cron/* não tem sessão de usuário (chamado pelo Vercel Cron) — a
+// própria rota valida o CRON_SECRET, não o proxy.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/api/health", "/api/cron"]
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
